@@ -18,7 +18,10 @@ alter table public.kora_wall_ball_videos
 alter table public.kora_wall_ball_videos
   add constraint ball_video_poster_path_valid check (
     poster_storage_path is null or
-    poster_storage_path = regexp_replace(storage_path, '[.]mp4 Audit and remove OTHER broad
+    poster_storage_path = regexp_replace(storage_path, '[.]mp4$', '.jpg')
+  );
+
+-- Remove the previous operator-only policy. Audit and remove OTHER broad
 -- Storage INSERT policies separately (permissive RLS policies combine with OR).
 drop policy if exists "kora_wall_operator_mp4_insert" on storage.objects;
 
