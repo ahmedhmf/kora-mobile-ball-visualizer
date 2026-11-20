@@ -53,3 +53,7 @@ After an artwork atlas has loaded on the ball, choose **Download rotating MP4**.
 ## Instagram Reel branding
 
 The export is now **720 × 1280 (9:16)**, 30 fps, 8 seconds, H.264 MP4. A deterministic smoke overlay drifts around the model, and a compact vector tracing of the uploaded KORA wordmark appears centered at the top over a pale backing panel (the supplied logo has black lettering). The smoke and branding are applied only in the export compositor, not to the source artwork or UV atlas. The portrait output is silent. The original full-resolution logo remains in the chat attachment; the repository contains a scaled vector trace for predictable mobile rendering.
+
+## KORA brand palette
+
+The app UI, loading indicators, camera guide, decorative ball preview, PWA icon, and video-export environment now use KORA black and brand red **#FF0006**. Previous green radial gradients, glow, and smoke are replaced with equivalent red-toned effects. White logo and user-uploaded artwork/UV atlas remain unchanged.

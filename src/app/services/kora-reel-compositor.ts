@@ -26,9 +26,9 @@ function smoke(ctx: CanvasRenderingContext2D, time: number, foreground: boolean)
     const radius = foreground ? 110 + (i % 4) * 25 : 185 + (i % 5) * 40;
     const gradient = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius);
     const alpha = (foreground ? 0.024 : 0.037) * (0.75 + 0.25 * Math.sin(time * 0.9 + seed));
-    gradient.addColorStop(0, 'rgba(189,213,191,' + alpha + ')');
-    gradient.addColorStop(0.55, 'rgba(137,178,151,' + (alpha * 0.4) + ')');
-    gradient.addColorStop(1, 'rgba(137,178,151,0)');
+    gradient.addColorStop(0, 'rgba(255,104,108,' + alpha + ')');
+    gradient.addColorStop(0.55, 'rgba(255,20,28,' + (alpha * 0.4) + ')');
+    gradient.addColorStop(1, 'rgba(255,20,28,0)');
     ctx.fillStyle = gradient;
     ctx.fillRect(centerX - radius, centerY - radius, radius * 2, radius * 2);
   }
@@ -45,15 +45,15 @@ export function composeReelFrame(
   ctx.clearRect(0, 0, width, height);
 
   const backdrop = ctx.createLinearGradient(0, 0, 0, height);
-  backdrop.addColorStop(0, '#09130f');
-  backdrop.addColorStop(0.55, '#14271e');
-  backdrop.addColorStop(1, '#060e0b');
+  backdrop.addColorStop(0, '#050000');
+  backdrop.addColorStop(0.55, '#250307');
+  backdrop.addColorStop(1, '#030000');
   ctx.fillStyle = backdrop;
   ctx.fillRect(0, 0, width, height);
 
   const glow = ctx.createRadialGradient(360, 775, 60, 360, 775, 570);
-  glow.addColorStop(0, 'rgba(102,162,105,0.22)');
-  glow.addColorStop(1, 'rgba(102,162,105,0)');
+  glow.addColorStop(0, 'rgba(255,0,6,0.22)');
+  glow.addColorStop(1, 'rgba(255,0,6,0)');
   ctx.fillStyle = glow;
   ctx.fillRect(0, 200, width, 1080);
 
@@ -74,8 +74,8 @@ export function composeReelFrame(
   ctx.restore();
 
   const ground = ctx.createRadialGradient(360, 1165, 0, 360, 1165, 300);
-  ground.addColorStop(0, 'rgba(182,225,157,0.075)');
-  ground.addColorStop(1, 'rgba(182,225,157,0)');
+  ground.addColorStop(0, 'rgba(255,25,32,0.075)');
+  ground.addColorStop(1, 'rgba(255,25,32,0)');
   ctx.fillStyle = ground;
   ctx.fillRect(0, 950, width, 330);
 }

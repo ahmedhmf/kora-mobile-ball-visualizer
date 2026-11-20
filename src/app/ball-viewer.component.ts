@@ -26,7 +26,7 @@ export class BallViewerComponent implements AfterViewInit, OnDestroy {
     this.engine = new Engine(this.surface.nativeElement, true, { preserveDrawingBuffer: true, alpha: true });
     const scene = new Scene(this.engine);
     this.scene = scene;
-    scene.clearColor = new Color4(0.05, 0.09, 0.07, 1);
+    scene.clearColor = new Color4(0.025, 0.005, 0.007, 1);
     const camera = new ArcRotateCamera('camera', Math.PI / 2, Math.PI / 2.4, 6, Vector3.Zero(), scene);
     this.camera = camera;
     camera.lowerRadiusLimit = 2.5;
