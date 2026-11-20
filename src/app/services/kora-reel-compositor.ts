@@ -65,16 +65,13 @@ export function composeReelFrame(
 
   smoke(ctx, time, true);
 
-  // The provided artwork is a black wordmark, so give it a luminous pale panel.
+  // Use the exact uploaded KORA wordmark as a transparent white overlay.
+  // No background plaque; the shadow only softens contrast against smoke.
   ctx.save();
-  ctx.shadowColor = 'rgba(213,245,190,0.22)';
-  ctx.shadowBlur = 40;
-  ctx.fillStyle = '#eaf3e0';
-  ctx.beginPath();
-  ctx.roundRect(57, 101, 606, 164, 27);
-  ctx.fill();
-  ctx.restore();
+  ctx.shadowColor = 'rgba(0,0,0,0.72)';
+  ctx.shadowBlur = 20;
   ctx.drawImage(logo, 86, 117, 548, 117);
+  ctx.restore();
 
   const ground = ctx.createRadialGradient(360, 1165, 0, 360, 1165, 300);
   ground.addColorStop(0, 'rgba(182,225,157,0.075)');
