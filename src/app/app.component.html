@@ -11,25 +11,6 @@
   <button class="primary" (click)="startCamera()"><span>◎ &nbsp; Scan your design</span><span>↗</span></button>
   <button class="secondary" (click)="upload()"><span>Upload photo or PDF</span><span>↗</span></button>
   <p class="hint">Best results: include the full sheet and all four corners.</p>
-  <details class="operator-setup">
-    <summary>Event device setup (one time)</summary>
-    <p role="status">{{ wallSetupStatus() }}</p>
-    @if (wallConfiguredEvent()) { <p class="event-name">Configured event: {{ wallConfiguredEvent() }}</p> }
-    @if (wallConnected()) {
-      <button class="secondary" [disabled]="wallSetupBusy()" (click)="disconnectWallOperator()">Disconnect event device</button>
-    } @else {
-      <label class="wall-field">Operator email
-        <input type="email" autocomplete="username" [value]="wallEmail()" [disabled]="wallSetupBusy()" (input)="wallEmail.set($any($event.target).value)">
-      </label>
-      <label class="wall-field">Operator password
-        <input type="password" autocomplete="current-password" [value]="wallPassword()" [disabled]="wallSetupBusy()" (input)="wallPassword.set($any($event.target).value)">
-      </label>
-      <button class="secondary" [disabled]="wallSetupBusy() || !wallEmail().trim() || !wallPassword()" (click)="connectWallOperator()">
-        {{ wallSetupBusy() ? 'Connecting…' : 'Connect this event device' }}
-      </button>
-    }
-    <p class="hint">Once authorized, each completed ball automatically uploads its MP4. No sign-in per ball.</p>
-  </details>
 </section>
 }
 @if (stage() === 'camera') {
@@ -67,13 +48,13 @@
 </div>
 <div class="publish-panel" aria-live="polite">
   <h3>Automatic event TV upload</h3>
-  <p>As soon as your ball is ready, its finished 9:16 MP4 is automatically rendered and uploaded directly to private Supabase Storage. No images or scanned artwork are uploaded.</p>
+  <p>As soon as your ball is ready, its finished 9:16 MP4 is automatically uploaded to the KORA event bucket and added to the TV feed. No login, upload button, or manual approval. Only MP4 video is uploaded.</p>
   @if (wallBusy()) {
     <p role="status">Rendering or uploading MP4… {{ exportPercent() }}%</p>
     <progress [value]="exportPercent()" max="100" aria-label="Automatic MP4 rendering progress"></progress>
   }
   @if (wallResult()) { <p class="wall-success" role="status">{{ wallResult() }}</p> }
-  <p class="hint">The video remains private until approved by the event moderator.</p>
+  <p class="hint">The bucket is public-read: anyone with a video URL can view it. Automatic video checks happen before publishing.</p>
 </div>
 <button class="secondary" [disabled]="exporting() || wallBusy()" (click)="reset()">Scan another design ↗</button>
 </section>

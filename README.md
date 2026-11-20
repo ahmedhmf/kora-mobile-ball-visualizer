@@ -62,38 +62,52 @@ The app UI, loading indicators, camera guide, decorative ball preview, PWA icon,
 
 The mobile header uses the existing transparent white KORA logo at `public/branding/kora-wordmark.svg`. The welcome screen uses a lightweight WebP copy of the supplied white/red/black KORA ball at `public/branding/kora-home-ball.webp` (240 × 240 pixels), replacing the illustrative CSS sphere. The 3D model/texture pipeline and MP4 export remain unchanged.
 
-## Direct-to-Supabase MP4 uploads
+## Automatic public-read MP4 uploads without login or manual approval
 
-The **finished 9:16 H.264 MP4** is uploaded **directly from Angular to the private Supabase Storage bucket** `kora-wall-media`; no Node server or upload endpoint is required. The app uploads **MP4 only**, never the scanned image, PDF or UV atlas. `Download MP4` stays available without publishing.
+Once a KORA 3D ball finishes loading its artwork, the frontend automatically
+renders an 8-second, portrait 720×1280 H.264 MP4. It requests an upload ticket
+from the Supabase Edge Function `kora-wall-ticket`, uploads the MP4 **directly
+to Storage** using a signed, single-object upload URL, and completes the ticket.
+The Edge Function performs best-effort MP4 format checks and then registers a
+wall metadata row with `event_screen_consent=true` and `approved=true`.
+No login, consent checkbox, operator field, upload button, or manual approval
+is required. The separate MP4 download button remains available.
 
-### Supabase setup (required)
+**Public means public:** Bucket `kora-wall-media` is public-read, so anyone
+with the object URL can watch the video. The wall's approval flag no longer
+provides privacy or content review. This is appropriate only for non-identifiable,
+authorized promotional artwork. Do not use this setup for participant media
+without appropriate permission.
 
-1. Create/verify a **private** bucket `kora-wall-media`; its size limit is **100 MiB**, MIME allowance `video/mp4`.
-2. In **Supabase Dashboard → SQL Editor**, run [`supabase/direct-wall-upload.sql`](supabase/direct-wall-upload.sql). It installs a narrowly scoped `storage.objects` INSERT policy for authenticated event operators and an authenticated, server-executed `register_kora_wall_ball_video` RPC that verifies the uploaded object and writes the metadata record.
-3. Configure [`public/kora-wall-config.json`](public/kora-wall-config.json) with **only** the project URL and public/publishable key:
+### Deployment setup (required before uploads work)
 
-   ```json
-   {
-     "supabaseUrl": "https://YOUR-PROJECT.supabase.co",
-     "supabasePublishableKey": "YOUR_PUBLIC_PUBLISHABLE_KEY"
-   }
-   ```
+1. Configure `public/kora-wall-config.json` with your Supabase URL and **public**
+   publishable key (not a service-role/secret key).
+2. Run [`supabase/automatic-wall-upload.sql`](supabase/automatic-wall-upload.sql)
+   in Supabase SQL Editor. It configures the public-read bucket and server-only
+   ticket reservation/completion RPCs. Audit and remove other permissive
+   Storage INSERT policies; no anonymous direct write policy is required.
+3. Deploy [`supabase/functions/kora-wall-ticket/index.ts`](supabase/functions/kora-wall-ticket/index.ts)
+   as a Supabase Edge Function called `kora-wall-ticket` with JWT verification
+   disabled (it intentionally has no user login).
+4. Set its **private Supabase Edge Function secrets**:
+   `SUPABASE_SERVICE_ROLE_KEY` (server only),
+   `KORA_EVENT_SLUG` (e.g. `event-1`),
+   `KORA_RATE_SALT` (long random server-side string), and
+   `KORA_ALLOWED_ORIGINS` (comma-separated HTTPS frontend origins).
+   Supabase supplies `SUPABASE_URL`. Never publish the server secret.
+5. Test one MP4 end to end. The function must be reachable at
+   `https://YOUR-PROJECT.supabase.co/functions/v1/kora-wall-ticket`.
+   The Angular app derives this URL automatically from `supabaseUrl`.
 
-4. In Supabase Auth, use administrator-only tooling to set the authenticated operator's `app_metadata`: `{"kora_wall_operator":true,"kora_wall_events":["event-1"]}`. Sign in again to refresh JWT claims. Event slugs must contain only letters, digits, `_` or `-`.
-5. Ensure `public.kora_wall_ball_videos` has the original columns, unique `storage_path`, and a default `uploaded_at` timestamp. Verify moderation and wall feed are active.
+**Security:** The ticket endpoint is deliberately public and uses IP/global
+quotas, an origin allowlist, unpredictable paths and one-use signed upload
+credentials. Origin and IP headers are not authentication; put a bot-management
+or verified-client challenge in front of the function for an unattended public
+event. The MP4 structural parser is not a substitute for full decoding,
+security scanning, or content moderation. Automatic approval means unsuitable
+or forged-but-structurally-valid clips may appear on the TV. Use trusted
+transcoding or abuse screening if this is a public-facing production event.
+Unregistered objects and expired tickets need a privileged cleanup job.
 
-### Security and moderation
-
-The browser generates `balls/<event-slug>/<random-v4-uuid>.mp4` and calls `supabase.storage.from('kora-wall-media').upload(path, mp4, {contentType:'video/mp4',upsert:false})`. After Storage confirms success, it calls `supabase.rpc('register_kora_wall_ball_video',{p_storage_path:path})`. **Both** the operator/event restrictions and the values `event_screen_consent=true, approved=false` are enforced by database code, never trusted from the browser. This is an authorized non-live promotional workflow; the consent flag here is not evidence of participant permission.
-
-**Important security difference:** Pure browser-to-Storage uploads cannot provide trusted FFmpeg/FFprobe validation or transcoding. The SQL function verifies object existence, ownership, MIME, size and path, but **not actual codec or MP4 bytes**. Keep uploaded objects `approved=false` until a trusted moderation/validation worker or operator checks/re-encodes H.264/yuv420p and faststart. A malformed or spoofed client upload must never become wall-visible solely because the MIME says `video/mp4`. Schedule privileged cleanup for failed registration orphans. Audit other Storage INSERT policies: permissive RLS policies are OR-combined, so any broad existing upload policy must be removed or narrowed.
-
-Never put a service-role/secret key in the frontend. Anonymous visitors cannot upload without authorization; only the published key and authenticated operator session are used. For production scale, enforce stronger per-event/user rate limits and object cleanup/validation.
-
-## Automatic MP4 publishing after ball generation
-
-After the 3D viewer finishes applying the prepared atlas, it **automatically renders the 8-second 9:16 MP4 and uploads it directly to the private `kora-wall-media` bucket**, then registers an unapproved metadata row. There is no per-ball form, consent checkbox, event slug field, password prompt or publish button. Only generated MP4 bytes leave the browser.
-
-**Required one-time device setup (not per ball):** Add `eventSlug` to `public/kora-wall-config.json` alongside the Supabase URL and public publishable key. Authorize an operator account through Supabase administrator-controlled `app_metadata` (see the SQL migration), and sign in once under **Event device setup (one time)** on the landing page. The browser stores and refreshes that operator session on this device; protect and sign out of shared devices. If setup or the stored session is missing, the app displays an explicit upload-unavailable status and does **not** attempt an unauthorized upload.
-
-The upload occurs after the ball artwork is prepared, not when a photo is selected. While it is rendering/uploading, scanning another design and starting another MP4 render are temporarily disabled. Download MP4 remains optional afterward. The private wall continues to require independent validation/moderation and `approved=true` before showing the video. Client browser checks are not a substitute for trusted MP4 validation.
+The legacy `supabase/direct-wall-upload.sql` is deprecated for this mode.

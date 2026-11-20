@@ -23,12 +23,6 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly exporting = signal(false);
   readonly exportPercent = signal(0);
   readonly wallBusy = signal(false);
-  readonly wallConfiguredEvent = signal('');
-  readonly wallConnected = signal(false);
-  readonly wallSetupStatus = signal('Checking event connection…');
-  readonly wallSetupBusy = signal(false);
-  readonly wallEmail = signal('');
-  readonly wallPassword = signal('');
   readonly wallResult = signal('');
   private preparedMp4?: Blob;
   private readonly prepare = inject(BallTexturePreparationService);
@@ -40,50 +34,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   private pending?: HTMLCanvasElement;
   private pendingGeneration = 0;
 
-  ngAfterViewInit(): void {
-    document.addEventListener('visibilitychange', this.visibility);
-    void this.refreshWallSetup();
-  }
-
-  private async refreshWallSetup(): Promise<void> {
-    try {
-      const setup = await this.wall.getOperatorStatus();
-      this.wallConfiguredEvent.set(setup.eventSlug);
-      this.wallConnected.set(setup.connected);
-      this.wallSetupStatus.set(setup.connected
-        ? 'Connected to event ' + setup.eventSlug + '. Every generated MP4 uploads automatically.'
-        : 'Operator setup required once on this device. Video uploads are not active yet.');
-    } catch (error) {
-      this.wallConnected.set(false);
-      this.wallSetupStatus.set(this.message(error));
-    }
-  }
-
-  async connectWallOperator(): Promise<void> {
-    if (this.wallSetupBusy()) return;
-    this.wallSetupBusy.set(true);
-    this.error.set('');
-    try {
-      await this.wall.signInOperator(this.wallEmail(), this.wallPassword());
-      await this.refreshWallSetup();
-    } catch (error) {
-      this.error.set(this.message(error));
-      await this.refreshWallSetup();
-    } finally {
-      this.wallPassword.set('');
-      this.wallSetupBusy.set(false);
-    }
-  }
-
-  async disconnectWallOperator(): Promise<void> {
-    if (this.wallSetupBusy() || this.wallBusy()) return;
-    this.wallSetupBusy.set(true);
-    try {
-      await this.wall.signOutOperator();
-      await this.refreshWallSetup();
-    } catch (error) { this.error.set(this.message(error)); }
-    finally { this.wallSetupBusy.set(false); }
-  }
+  ngAfterViewInit(): void { document.addEventListener('visibilitychange', this.visibility); }
   private visibility = () => { if (document.hidden) this.stopCamera(); };
   private stopCamera(): void {
     this.stream?.getTracks().forEach(t => t.stop());
@@ -221,10 +172,6 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (generation !== this.pendingGeneration || this.wallBusy() || !this.viewer) return;
     this.wallResult.set('');
     this.exportPercent.set(0);
-    if (!this.wallConnected()) {
-      this.wallResult.set('Automatic TV upload unavailable: ' + this.wallSetupStatus());
-      return;
-    }
     this.wallBusy.set(true);
     try {
       const mp4 = this.preparedMp4 ?? await this.viewer.exportMp4(p => this.exportPercent.set(p));
@@ -233,12 +180,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       this.wallResult.set('MP4 rendered. Uploading to private Supabase Storage…');
       await this.wall.publish(mp4);
       if (generation === this.pendingGeneration) {
-        this.wallResult.set('MP4 uploaded to Supabase successfully. Pending moderation approval.');
+        this.wallResult.set('MP4 uploaded to Supabase and automatically published to the event TV feed.');
       }
     } catch (error) {
       if (generation === this.pendingGeneration) {
         this.wallResult.set('Automatic MP4 upload failed: ' + this.message(error));
-        await this.refreshWallSetup();
       }
     } finally {
       this.wallBusy.set(false);
