@@ -1,0 +1,4 @@
+# A public Edge Function without end-user login.
+# Signed Storage upload tokens are issued only after server-side quotas.
+[functions.kora-wall-ticket]
+verify_jwt = false
