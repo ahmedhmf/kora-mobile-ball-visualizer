@@ -61,3 +61,16 @@ The app UI, loading indicators, camera guide, decorative ball preview, PWA icon,
 ## Application branding assets
 
 The mobile header uses the existing transparent white KORA logo at `public/branding/kora-wordmark.svg`. The welcome screen uses a lightweight WebP copy of the supplied white/red/black KORA ball at `public/branding/kora-home-ball.webp` (240 × 240 pixels), replacing the illustrative CSS sphere. The 3D model/texture pipeline and MP4 export remain unchanged.
+
+## Protected event TV MP4 publishing
+
+After generating a ball, users may **download the MP4 locally** without publishing. A separate section allows an explicitly authorized operator to attest display consent, sign in with Supabase Auth, and submit the *rendered MP4 only* for moderation. No scanned source photo, PDF, image, PNG or UV atlas is uploaded.
+
+This feature **requires deployment and configuration** before it can work:
+- Deploy the trusted `server/` Node upload service with FFmpeg/FFprobe and secret Supabase service credentials; follow `server/README.md`.
+- Configure the public `public/kora-wall-config.json` with the Supabase project URL, public/publishable key and trusted HTTPS server upload endpoint. It is intentionally blank by default.
+- Have a Supabase administrator mark trusted accounts with `app_metadata.kora_wall_operator=true` and configure permitted event slugs.
+- The upload endpoint registers `event_screen_consent=true` only for an authenticated operator's explicit attestation and `approved=false` always. A separate trusted moderator must approve before the existing wall feed can show the clip.
+- Add shared rate limits/quotas and event-specific operator permissions for deployment at scale; never expose the service-role key or let anonymous visitors write to Storage.
+
+The public site cannot claim a completed upload until the trusted server returns success. The MP4 download workflow is unchanged.
