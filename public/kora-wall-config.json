@@ -1,4 +1,5 @@
 {
   "supabaseUrl": "",
-  "supabasePublishableKey": ""
+  "supabasePublishableKey": "",
+  "eventSlug": ""
 }

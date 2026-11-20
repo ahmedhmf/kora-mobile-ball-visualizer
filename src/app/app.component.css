@@ -15,3 +15,10 @@
 .wall-field input{margin-top:7px;display:block;width:100%;min-height:45px;padding:10px 12px;border-radius:9px;border:1px solid #71383a;background:#090304;color:#fff;outline:none;font-size:14px}
 .wall-field input:focus-visible{border-color:#ff0006;box-shadow:0 0 0 2px rgba(255,0,6,.2)}
 .wall-success{color:#f3c6c6;background:#351216;border:1px solid #7a3036;border-radius:8px;padding:12px}
+
+/* Configure an authorized kiosk once; never ask for details per generated ball. */
+.operator-setup{margin-top:20px;border:1px solid #612124;border-radius:12px;background:#180608;padding:15px;color:#f9e8e8}
+.operator-setup summary{cursor:pointer;font-size:12px;letter-spacing:.04em;font-weight:700}
+.operator-setup p{font-size:12px;margin:12px 0}
+.operator-setup .event-name{color:#ff6265}
+.publish-panel progress{display:block;width:100%;height:8px;accent-color:#ff0006;margin:12px 0}

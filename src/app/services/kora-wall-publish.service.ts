@@ -4,82 +4,115 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 interface WallConfig {
   supabaseUrl: string;
   supabasePublishableKey: string;
+  eventSlug: string;
 }
 export interface WallPublishResult { status: 'pending_approval'; }
 
 /**
- * Uploads generated MP4 bytes DIRECTLY to the private Supabase Storage bucket.
- * An authenticated operator and restrictive Storage RLS policy are required.
- * A privileged SQL RPC registers the object as unapproved; the client cannot
- * change consent/approval flags or write directly to the wall metadata table.
+ * Direct private Storage upload. Credentials are NEVER embedded in the PWA.
+ * The operator signs in once on the event device; the session persists.
+ * Supabase Storage RLS and the registration RPC enforce event permissions.
  */
 @Injectable({ providedIn: 'root' })
 export class KoraWallPublishService {
   private client?: SupabaseClient;
+  private config?: WallConfig;
 
-  private async setup(): Promise<SupabaseClient> {
-    if (this.client) return this.client;
+  private async setup(): Promise<{ client: SupabaseClient; config: WallConfig }> {
+    if (this.client && this.config) return { client: this.client, config: this.config };
     const response = await fetch(new URL('kora-wall-config.json', document.baseURI), { cache: 'no-store' });
-    if (!response.ok) throw new Error('Supabase publishing is not configured.');
+    if (!response.ok) throw new Error('Event TV upload configuration could not be loaded.');
     const config = await response.json() as Partial<WallConfig>;
-    if (!config.supabaseUrl || !config.supabasePublishableKey) {
-      throw new Error('Configure the Supabase project URL and publishable key before using event TV publishing.');
+    if (!config.supabaseUrl || !config.supabasePublishableKey ||
+        !config.eventSlug || !/^[A-Za-z0-9_-]{1,64}$/.test(config.eventSlug)) {
+      throw new Error('Set supabaseUrl, supabasePublishableKey and eventSlug in kora-wall-config.json.');
     }
     const url = new URL(config.supabaseUrl);
     if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname))) {
-      throw new Error('Supabase requires an HTTPS URL.');
+      throw new Error('The configured Supabase URL must use HTTPS.');
     }
+    this.config = config as WallConfig;
     this.client = createClient(url.toString(), config.supabasePublishableKey, {
-      auth: { autoRefreshToken: true, persistSession: false }
+      // Once signed in on the authorized event device, operators do NOT
+      // need to type credentials again for each generated ball.
+      auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: false }
     });
-    return this.client;
+    return { client: this.client, config: this.config };
+  }
+
+  private async verifyOperator(): Promise<{ client: SupabaseClient; eventSlug: string }> {
+    const { client, config } = await this.setup();
+    // Always check the authenticated user, not the editable local state.
+    const { data, error } = await client.auth.getUser();
+    if (error || !data.user) {
+      throw new Error('Operator setup required: sign in once on this event device.');
+    }
+    const claims = data.user.app_metadata;
+    if (claims?.['kora_wall_operator'] !== true ||
+        !Array.isArray(claims?.['kora_wall_events']) ||
+        !claims['kora_wall_events'].includes(config.eventSlug)) {
+      throw new Error('This Supabase operator is not authorized for the configured event.');
+    }
+    return { client, eventSlug: config.eventSlug };
+  }
+
+  async getOperatorStatus(): Promise<{ eventSlug: string; connected: boolean }> {
+    const { config } = await this.setup();
+    try {
+      await this.verifyOperator();
+      return { eventSlug: config.eventSlug, connected: true };
+    } catch {
+      return { eventSlug: config.eventSlug, connected: false };
+    }
   }
 
   async signInOperator(email: string, password: string): Promise<void> {
-    if (!email || !password) throw new Error('Operator email and password are required.');
-    const client = await this.setup();
-    const { error } = await client.auth.signInWithPassword({ email, password });
+    if (!email.trim() || !password) throw new Error('Operator email and password are required for first-time setup.');
+    const { client } = await this.setup();
+    const { error } = await client.auth.signInWithPassword({ email: email.trim(), password });
     if (error) throw new Error('Operator sign-in failed.');
+    try {
+      await this.verifyOperator();
+    } catch (error) {
+      await client.auth.signOut();
+      throw error;
+    }
   }
 
-  async publish(mp4: Blob, eventSlug: string): Promise<WallPublishResult> {
-    if (!/^[A-Za-z0-9_-]{1,64}$/.test(eventSlug)) {
-      throw new Error('Enter an event slug using letters, numbers, underscores or hyphens.');
-    }
-    if (mp4.type !== 'video/mp4') throw new Error('Only rendered MP4 videos can be published.');
+  async signOutOperator(): Promise<void> {
+    const { client } = await this.setup();
+    await client.auth.signOut();
+  }
+
+  async publish(mp4: Blob): Promise<WallPublishResult> {
+    if (mp4.type !== 'video/mp4') throw new Error('Only generated MP4 videos may be uploaded.');
     if (mp4.size === 0 || mp4.size > 100 * 1024 * 1024) {
-      throw new Error('The MP4 must be within the 100 MiB Storage limit.');
+      throw new Error('The MP4 exceeds the 100 MiB bucket limit or is empty.');
     }
-    // Fast client-side sanity check; bucket RLS and later moderation/validation
-    // are authoritative, never client-provided metadata.
     const header = new Uint8Array(await mp4.slice(0, 12).arrayBuffer());
     if (header.length < 12 || String.fromCharCode(...header.slice(4, 8)) !== 'ftyp') {
-      throw new Error('The generated video does not appear to be a valid MP4.');
+      throw new Error('The generated file is not an MP4 container.');
     }
-
-    const client = await this.setup();
-    const { data, error: userError } = await client.auth.getUser();
-    if (userError || !data.user) throw new Error('Operator sign-in is required to upload videos.');
-
-    // The random name is deliberately unpredictable, has no user-derived path
-    // segments, and is validated independently by the Storage RLS policy.
+    const { client, eventSlug } = await this.verifyOperator();
     const path = 'balls/' + eventSlug + '/' + crypto.randomUUID() + '.mp4';
-    const { error: uploadError } = await client.storage
-      .from('kora-wall-media')
-      .upload(path, mp4, { contentType: 'video/mp4', upsert: false, cacheControl: '3600' });
+    const { error: uploadError } = await client.storage.from('kora-wall-media').upload(path, mp4, {
+      contentType: 'video/mp4',
+      upsert: false,
+      cacheControl: '3600'
+    });
     if (uploadError) {
-      throw new Error('Supabase Storage upload failed. Check operator permissions, bucket settings and file limits.');
+      throw new Error('Storage upload failed: ' + uploadError.message);
     }
 
-    // A security-definer RPC checks the actual Storage object exists and belongs
-    // to this operator, then inserts consent=true and approved=false server-side.
-    const { error: registerError } = await client.rpc('register_kora_wall_ball_video', {
+    // Protected SQL RPC sets event_screen_consent=true and approved=false.
+    // The browser cannot approve or insert arbitrary video metadata rows.
+    const { error: registrationError } = await client.rpc('register_kora_wall_ball_video', {
       p_storage_path: path
     });
-    if (registerError) {
-      // No broad client DELETE policy: do not expose deletion of wall media.
-      // A privileged cleanup job should remove any unregistered orphan objects.
-      throw new Error('MP4 reached private Storage but registration failed. Contact the operator to clear the unregistered upload.');
+    if (registrationError) {
+      // The private bucket intentionally has no client DELETE policy.
+      // A privileged cleanup job should delete this unregistered object.
+      throw new Error('MP4 uploaded but metadata registration failed. An operator must clean the unregistered object.');
     }
     return { status: 'pending_approval' };
   }
