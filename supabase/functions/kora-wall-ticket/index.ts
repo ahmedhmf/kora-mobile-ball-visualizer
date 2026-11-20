@@ -172,9 +172,23 @@ Deno.serve(async request => {
       const valid = await file.arrayBuffer().then(x => validMp4(new Uint8Array(x))).catch(() => false);
       if (!valid) return respond(422, { error: 'MP4 failed automatic format checks' }, origin);
       const posterPath=ticket.replace(/\.mp4$/, '.jpg');
-      const {data:poster, error:posterError}=await admin.storage.from('kora-wall-media').download(posterPath);
-      if(posterError || !poster || poster.size<100 || poster.size>2*1024*1024){
-        return respond(422,{error:'Ball still image missing or too large'},origin);
+      // Storage uploads can become readable just after the signed-upload response.
+      // Retry only the read: never issue another upload or publish twice.
+      let poster: Blob | null = null;
+      let lastPosterError = '';
+      for(let attempt=0;attempt<4;attempt++){
+        const result=await admin.storage.from('kora-wall-media').download(posterPath);
+        if(!result.error && result.data){poster=result.data;break;}
+        lastPosterError=result.error?.message ?? 'No file returned';
+        if(attempt<3)await new Promise(resolve=>setTimeout(resolve,400*(attempt+1)));
+      }
+      if(!poster){
+        console.error('KORA poster download failed after retries',lastPosterError);
+        return respond(422,{error:'Ball still image was uploaded but could not be read from Storage. Please retry publishing.'},origin);
+      }
+      if(poster.size<100 || poster.size>2*1024*1024){
+        console.error('KORA poster size rejected',poster.size);
+        return respond(422,{error:'Ball still image is outside the allowed size (100 bytes to 2 MiB).'},origin);
       }
       const bytes=new Uint8Array(await poster.arrayBuffer());
       if(bytes[0]!==0xff || bytes[1]!==0xd8 || bytes[bytes.length-2]!==0xff || bytes[bytes.length-1]!==0xd9){
