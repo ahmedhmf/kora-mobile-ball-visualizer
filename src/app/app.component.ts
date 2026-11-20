@@ -2,6 +2,7 @@ import { AfterViewInit, Component, ElementRef, OnDestroy, ViewChild, inject, sig
 import { BallViewerComponent } from './ball-viewer.component';
 import { BallTexturePreparationService } from './services/ball-texture-preparation.service';
 import { ScanInputService } from './services/scan-input.service';
+import { KoraWallPublishService } from './services/kora-wall-publish.service';
 
 type Stage = 'start' | 'camera' | 'review' | 'preparing' | 'ball';
 
@@ -21,8 +22,15 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly ready = signal(false);
   readonly exporting = signal(false);
   readonly exportPercent = signal(0);
+  readonly wallBusy = signal(false);
+  readonly wallEvent = signal('');
+  readonly wallEmail = signal('');
+  readonly wallPassword = signal('');
+  readonly wallResult = signal('');
+  private preparedMp4?: Blob;
   private readonly prepare = inject(BallTexturePreparationService);
   private readonly inputs = inject(ScanInputService);
+  private readonly wall = inject(KoraWallPublishService);
   private stream?: MediaStream;
   private source?: HTMLCanvasElement;
   private imageUrl?: string;
@@ -85,6 +93,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   private review(source: HTMLCanvasElement): void {
     this.stopCamera();
     this.source = source;
+    this.preparedMp4 = undefined;
+    this.wallResult.set('');
     if (this.imageUrl) URL.revokeObjectURL(this.imageUrl);
     const url = source.toDataURL('image/jpeg', .82);
     this.image.set(url);
@@ -101,6 +111,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       const result = await this.prepare.prepare(source, true, true, s => this.status.set(s));
       if (generation !== this.pendingGeneration) return;
       this.uncertain.set(result.orientationUncertain);
+      this.preparedMp4 = undefined;
       this.pending = result.atlas;
       this.stage.set('ball');
       requestAnimationFrame(() => void this.applyPending(generation));
@@ -116,6 +127,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       return;
     }
     const generation = ++this.pendingGeneration;
+    this.preparedMp4 = undefined;
     this.pending = this.source;
     this.uncertain.set(false);
     this.stage.set('ball');
@@ -133,12 +145,13 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
   }
   async downloadMp4(): Promise<void> {
-    if (this.exporting() || !this.ready() || !this.viewer) return;
+    if (this.exporting() || this.wallBusy() || !this.ready() || !this.viewer) return;
     this.error.set('');
     this.exportPercent.set(0);
     this.exporting.set(true);
     try {
-      const mp4 = await this.viewer.exportMp4(progress => this.exportPercent.set(progress));
+      const mp4 = this.preparedMp4 ?? await this.viewer.exportMp4(progress => this.exportPercent.set(progress));
+      this.preparedMp4 = mp4;
       const url = URL.createObjectURL(mp4);
       const link = document.createElement('a');
       link.href = url;
@@ -155,12 +168,36 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+  async publishToEventWall(): Promise<void> {
+    if (this.wallBusy() || this.exporting() || !this.viewer || !this.ready()) return;
+    this.error.set('');
+    this.wallResult.set('');
+    this.wallBusy.set(true);
+    this.exportPercent.set(0);
+    try {
+      // Operators sign in with Supabase Auth. No upload keys or private bucket paths
+      // are ever available to the Angular app.
+      await this.wall.signInOperator(this.wallEmail().trim(), this.wallPassword());
+      this.wallPassword.set('');
+      const mp4 = this.preparedMp4 ?? await this.viewer.exportMp4(p => this.exportPercent.set(p));
+      this.preparedMp4 = mp4;
+      await this.wall.publish(mp4, this.wallEvent().trim());
+      this.wallResult.set('MP4 uploaded for moderation. It will appear on the event TV only after operator approval.');
+    } catch (error) {
+      this.wallPassword.set('');
+      this.error.set(this.message(error));
+    } finally { this.wallBusy.set(false); }
+  }
+
   reset(): void {
-    if (this.exporting()) return;
+    if (this.exporting() || this.wallBusy()) return;
     ++this.pendingGeneration;
     this.stopCamera();
     this.source = undefined;
     this.pending = undefined;
+    this.preparedMp4 = undefined;
+    this.wallPassword.set('');
+    this.wallResult.set('');
     this.ready.set(false);
     this.error.set('');
     this.stage.set('start');

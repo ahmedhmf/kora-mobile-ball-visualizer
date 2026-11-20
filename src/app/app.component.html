@@ -35,7 +35,7 @@
 <div class="export-panel">
   <div class="export-heading"><span>↻ &nbsp; 360° VIDEO</span><strong>9:16 · 720 × 1280 · MP4</strong></div>
   <p>Create an 8-second vertical Instagram Reel with a rotating ball, drifting smoke and your KORA logo at the top.</p>
-  <button class="primary" [disabled]="!ready() || exporting()" (click)="downloadMp4()">
+  <button class="primary" [disabled]="!ready() || exporting() || wallBusy()" (click)="downloadMp4()">
     <span>{{ exporting() ? 'Exporting MP4… ' + exportPercent() + '%' : '↓  Download rotating MP4' }}</span>
     <span>{{ exporting() ? '◌' : '↗' }}</span>
   </button>
@@ -44,7 +44,25 @@
     <p class="hint">Keep this page open until the download begins.</p>
   }
 </div>
-<button class="secondary" [disabled]="exporting()" (click)="reset()">Scan another design ↗</button>
+<div class="publish-panel">
+  <h3>Show this MP4 on the event TV</h3>
+  <p>For authorized KORA promotional content. Only the finished MP4 is submitted, never the source photo or UV artwork. Operator sign-in is required.</p>
+  <label class="wall-field">Event slug
+    <input type="text" autocomplete="off" placeholder="Provided by event operator" [value]="wallEvent()" [disabled]="wallBusy()" (input)="wallEvent.set($any($event.target).value)">
+  </label>
+  <label class="wall-field">Authorized operator email
+    <input type="email" autocomplete="username" placeholder="Operator email" [value]="wallEmail()" [disabled]="wallBusy()" (input)="wallEmail.set($any($event.target).value)">
+  </label>
+  <label class="wall-field">Operator password
+    <input type="password" autocomplete="current-password" placeholder="Password" [value]="wallPassword()" [disabled]="wallBusy()" (input)="wallPassword.set($any($event.target).value)">
+  </label>
+  <button class="secondary" [disabled]="!ready() || exporting() || wallBusy() || !wallEvent().trim() || !wallEmail().trim() || !wallPassword()" (click)="publishToEventWall()">
+    {{ wallBusy() ? 'Rendering and securely uploading MP4… ' + exportPercent() + '%' : 'Send MP4 for event TV approval ↗' }}
+  </button>
+  @if (wallResult()) { <p class="wall-success" role="status">{{ wallResult() }}</p> }
+  <p class="hint">Uploaded clips remain private and require separate moderation approval before the TV can display them.</p>
+</div>
+<button class="secondary" [disabled]="exporting() || wallBusy()" (click)="reset()">Scan another design ↗</button>
 </section>
 }
 </main>
