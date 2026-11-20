@@ -2,3 +2,7 @@ node_modules/
 dist/
 .angular/
 public/workers/pdf.worker.min.mjs
+.env
+.env.*
+!.env.example
+server/node_modules/

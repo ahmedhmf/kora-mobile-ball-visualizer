@@ -46,6 +46,10 @@ async function requireOperator(req, res, next) {
     if (error || !data?.user || data.user.app_metadata?.kora_wall_operator !== true) {
       return res.status(403).json({ error: 'Operator authorization required' });
     }
+    // Verify operator access to this event using administrator-controlled claims.
+    // Prevent a staff member for Event A from publishing to Event B.
+    req.authorizedEvents = new Set(Array.isArray(data.user.app_metadata?.kora_wall_events)
+      ? data.user.app_metadata.kora_wall_events : []);
     next();
   } catch { res.status(401).json({ error: 'Authentication failed' }); }
 }
@@ -122,7 +126,7 @@ async function handleUpload(req, res) {
     const slug = req.body?.eventSlug;
     if (!req.file || req.file.mimetype !== 'video/mp4') return res.status(400).json({ error: 'MP4 file required' });
     if (req.body.consentConfirmed !== 'true') return res.status(400).json({ error: 'Explicit consent required' });
-    if (typeof slug !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(slug) || !allowedEvents.has(slug)) {
+    if (typeof slug !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(slug) || !allowedEvents.has(slug) || !req.authorizedEvents?.has(slug)) {
       return res.status(400).json({ error: 'Unknown event' });
     }
 
