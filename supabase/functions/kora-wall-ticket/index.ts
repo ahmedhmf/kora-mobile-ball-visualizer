@@ -128,6 +128,7 @@ Deno.serve(async request => {
       const ticketId = crypto.randomUUID();
       const ticketSecret = hex(crypto.getRandomValues(new Uint8Array(32)));
       const path = 'balls/' + eventSlug + '/' + crypto.randomUUID() + '.mp4';
+      const posterPath = path.replace(/\.mp4$/, '.jpg');
       const { error: quotaError } = await admin.rpc('kora_reserve_wall_upload', {
         p_id: ticketId, p_path: path, p_ip_hash: ipHash,
         p_secret_hash: await hash(ticketSecret)
@@ -139,8 +140,12 @@ Deno.serve(async request => {
       const { data, error } = await admin.storage.from('kora-wall-media')
         .createSignedUploadUrl(path, { upsert: false });
       if (error || !data?.token) throw error ?? Error('Could not sign upload');
+      const {data:poster, error:posterError} = await admin.storage.from('kora-wall-media')
+        .createSignedUploadUrl(posterPath, {upsert:false});
+      if (posterError || !poster?.token) throw posterError ?? Error('Could not sign poster upload');
       return respond(200, {
-        ticketId, ticketSecret, storagePath: path, uploadToken: data.token
+        ticketId, ticketSecret, storagePath:path, uploadToken:data.token,
+        posterPath, posterUploadToken:poster.token
       }, origin);
     }
 
@@ -166,6 +171,15 @@ Deno.serve(async request => {
       }
       const valid = await file.arrayBuffer().then(x => validMp4(new Uint8Array(x))).catch(() => false);
       if (!valid) return respond(422, { error: 'MP4 failed automatic format checks' }, origin);
+      const posterPath=ticket.replace(/\.mp4$/, '.jpg');
+      const {data:poster, error:posterError}=await admin.storage.from('kora-wall-media').download(posterPath);
+      if(posterError || !poster || poster.size<100 || poster.size>2*1024*1024){
+        return respond(422,{error:'Ball still image missing or too large'},origin);
+      }
+      const bytes=new Uint8Array(await poster.arrayBuffer());
+      if(bytes[0]!==0xff || bytes[1]!==0xd8 || bytes[bytes.length-2]!==0xff || bytes[bytes.length-1]!==0xd9){
+        return respond(422,{error:'Invalid JPEG ball still image'},origin);
+      }
 
       const { error } = await admin.rpc('kora_complete_wall_upload', {
         p_id: id, p_secret_hash: secretHash
