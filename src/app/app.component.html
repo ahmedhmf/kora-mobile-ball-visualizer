@@ -1,0 +1,43 @@
+<div class="shell">
+<header><div class="brand"><span class="brandmark">K</span><strong>KORA <small>SCANNER</small></strong></div><span class="live">● ARTWORK TO 3D</span></header>
+<input #picker type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.pdf" (change)="selected($event)" hidden>
+<main>
+@if (stage() === 'start') {
+<section class="landing">
+  <span class="eyebrow">YOUR DESIGN, ON THE BALL</span>
+  <h1>Bring your<br><em>artwork</em> to life.</h1>
+  <p>Scan your printed KORA A3 sheet and watch your own design wrap around a 3D football.</p>
+  <div class="art"><div class="fakeball"><span></span></div><div class="stamp">32 PANELS. ONE DESIGN.</div></div>
+  <button class="primary" (click)="startCamera()"><span>◎ &nbsp; Scan your design</span><span>↗</span></button>
+  <button class="secondary" (click)="upload()"><span>Upload photo or PDF</span><span>↗</span></button>
+  <p class="hint">Best results: include the full sheet and all four corners.</p>
+</section>
+}
+@if (stage() === 'camera') {
+<section><div class="eyebrow">01 / CAPTURE</div><h2>Frame your sheet</h2><p>Keep all four corners visible. Avoid glare, shadow and blur.</p>
+<div class="stage camera"><video #video autoplay playsinline muted></video><div class="guide"><b></b><b></b><b></b><b></b></div><span class="tag">A3 · PORTRAIT</span></div>
+<div class="actions"><button class="secondary" (click)="reset()">Cancel</button><button class="primary" (click)="capture()">Capture photo ↗</button></div>
+</section>
+}
+@if (stage() === 'review') {
+<section><div class="eyebrow">02 / REVIEW</div><h2>Check your scan</h2><p>Confirm the printed sheet is complete and the artwork is sharp.</p>
+<div class="stage review"><img [src]="image()" alt="Full captured design sheet"></div>
+<div class="actions"><button class="secondary" (click)="reset()">Start over</button><button class="primary" (click)="useScan()">Use scan ↗</button></div>
+<button class="textbutton" (click)="directAtlas()">Use as UV-ready 1024 × 1024 atlas</button>
+</section>
+}
+@if (stage() === 'preparing') {
+<section class="processing"><div class="spinner"></div><div class="eyebrow">03 / PROCESSING</div><h2>Making it yours.</h2><p role="status">{{status()}}</p></section>
+}
+@if (stage() === 'ball') {
+<section><div class="eyebrow">04 / YOUR KORA BALL</div><h2>Your design. In 3D.</h2><p>Drag to rotate. Pinch to zoom.</p>
+<div class="stage ball"><app-ball-viewer></app-ball-viewer><span class="tag">INTERACTIVE 3D</span></div>
+@if (!ready()) {<p role="status" class="hint">Loading the exact KORA model and prepared texture…</p>}
+@if (uncertain()) {<p class="notice">Orientation looks uncertain. <button (click)="useScan(true)">Rotate source 180° and try again</button></p>}
+<button class="primary" (click)="reset()">Scan another design ↗</button>
+</section>
+}
+</main>
+@if (error()) { <aside class="error" role="alert">{{error()}} <button (click)="error.set('')">×</button></aside> }
+<footer><span>MADE FOR KORA</span><span>SCAN · CREATE · PLAY</span></footer>
+</div>
