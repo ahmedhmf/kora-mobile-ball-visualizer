@@ -1,54 +1,67 @@
--- Apply using Supabase Dashboard > SQL Editor.
--- Client uploads MP4 DIRECTLY to the private bucket, with no service-role key.
--- Review existing Storage policies: permissive existing INSERT policies are OR-ed
--- together, so remove/adjust any broad policies that grant public uploads.
+-- KORA: direct authenticated MP4 uploads to private Supabase Storage.
+-- Run this entire file in Supabase Dashboard > SQL Editor.
+-- NOTE: Review and remove any existing overly permissive Storage INSERT policies:
+-- permissive policies combine with OR, and can bypass this restriction.
 
--- Require the existing private bucket and constrain MIME/size at the bucket.
--- Do not alter existing objects or bucket public/private status implicitly.
+-- The bucket must already exist. Keep it private and limit uploads to MP4/100 MiB.
 update storage.buckets
 set public = false,
     file_size_limit = 104857600,
     allowed_mime_types = array['video/mp4']::text[]
 where id = 'kora-wall-media';
 
--- Never grant browser INSERT/UPDATE/DELETE on metadata, even if an RLS policy exists.
+-- The client must never directly control consent/approval metadata.
 alter table public.kora_wall_ball_videos enable row level security;
 revoke insert, update, delete on public.kora_wall_ball_videos from anon, authenticated;
 
--- Storage policies call this function with the proposed bucket-relative path.
--- It checks trusted app_metadata JWT claims, the per-event authorization, and
--- an approximate per-user quota. Always refresh tokens after assigning claims.
+-- The Storage INSERT policy calls this function to authorize a proposed path.
+-- app_metadata is set by a Supabase administrator, never by the participant.
 create or replace function public.kora_can_upload_wall_ball(p_path text)
 returns boolean
 language plpgsql
 security definer
 set search_path = ''
 stable
-as $$
+as $kora$
 declare
   v_event text;
 begin
-  if auth.uid() is null then return false; end if;
+  if auth.uid() is null then
+    return false;
+  end if;
+
   if coalesce(auth.jwt() -> 'app_metadata' ->> 'kora_wall_operator', 'false') <> 'true' then
     return false;
   end if;
+
+  -- Only balls/<event-slug>/<random-v4-uuid>.mp4 (bucket-relative).
   if p_path !~ '^balls/[A-Za-z0-9_-]{1,64}/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}[.]mp4$' then
     return false;
   end if;
+
   v_event := split_part(p_path, '/', 2);
-  if not (coalesce(auth.jwt() -> 'app_metadata' -> 'kora_wall_events', '[]'::jsonb) ? v_event) then
+  if not (
+    coalesce(auth.jwt() -> 'app_metadata' -> 'kora_wall_events', '[]'::jsonb)
+    ? v_event
+  ) then
     return false;
   end if;
-  -- 12 uploads per signed-in operator per hour (best-effort concurrency bound).
-  if (select count(*) from storage.objects
-      where bucket_id = 'kora-wall-media'
-        and owner_id = auth.uid()::text
-        and created_at >= now() - interval '1 hour') >= 12 then
+
+  -- Best-effort 12-per-hour operator quota. For strict/concurrent limits,
+  -- use a trusted rate-limited service or transactional counter.
+  if (
+    select count(*)
+    from storage.objects
+    where bucket_id = 'kora-wall-media'
+      and owner_id = auth.uid()::text
+      and created_at >= now() - interval '1 hour'
+  ) >= 12 then
     return false;
   end if;
+
   return true;
 end;
-$$;
+$kora$;
 
 revoke all on function public.kora_can_upload_wall_ball(text) from public;
 grant execute on function public.kora_can_upload_wall_ball(text) to authenticated;
@@ -63,88 +76,60 @@ with check (
   and public.kora_can_upload_wall_ball(name)
 );
 
--- The browser calls this after successful Storage upload. It cannot supply
--- a consent/approved value: the server writes both constants.
+-- Called after successful browser-to-Storage upload. No client approval/consent
+-- arguments; registration always sets true/false under a trusted SQL function.
 create or replace function public.register_kora_wall_ball_video(p_storage_path text)
 returns void
 language plpgsql
 security definer
 set search_path = ''
-as $$
+as $kora$
 declare
   v_storage storage.objects%rowtype;
 begin
-  -- Verify identity, event membership and path without re-running the upload
-  -- quota. The upload itself already incremented that counter.
+  -- Do NOT call kora_can_upload_wall_ball here: its hourly quota already
+  -- counts the newly uploaded object, so doing so would reject the 12th upload.
   if auth.uid() is null
     or coalesce(auth.jwt() -> 'app_metadata' ->> 'kora_wall_operator', 'false') <> 'true'
-    or p_storage_path !~ '^balls/[A-Za-z0-9_-]{1,64}/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}[.]mp4
-
-  select * into v_storage
-  from storage.objects
-  where bucket_id = 'kora-wall-media' and name = p_storage_path
-  for update;
-
-  if not found or v_storage.owner_id is distinct from auth.uid()::text then
-    raise exception 'Uploaded MP4 not found or not owned by this operator' using errcode = '42501';
-  end if;
-  if coalesce(v_storage.metadata ->> 'mimetype', '') <> 'video/mp4'
-    or coalesce((v_storage.metadata ->> 'size')::bigint, 0) <= 0
-    or coalesce((v_storage.metadata ->> 'size')::bigint, 0) > 104857600 then
-    raise exception 'MP4 metadata does not meet Storage limits' using errcode = '22023';
-  end if;
-
-  insert into public.kora_wall_ball_videos
-    (storage_path, event_screen_consent, approved)
-  values
-    (p_storage_path, true, false);
-  -- uploaded_at is generated by the database default.
-  -- Moderation must separately validate media bytes before setting approved=true.
-end;
-$$;
-
-revoke all on function public.register_kora_wall_ball_video(text) from public;
-grant execute on function public.register_kora_wall_ball_video(text) to authenticated;
-
--- The application does not receive Storage SELECT/UPDATE/DELETE privileges.
--- Existing broad policies and table grants must be audited separately.
--- Storage metadata cannot establish the video codec or pixel format. Your
--- trusted moderation/approval process MUST inspect/normalize media bytes
--- before setting approved=true. A malicious client can upload a forged MP4.
--- Schedule privileged cleanup of orphaned objects that lack metadata rows.
-
-
-    or not (coalesce(auth.jwt() -> 'app_metadata' -> 'kora_wall_events', '[]'::jsonb)
-            ? split_part(p_storage_path, '/', 2))
+    or p_storage_path !~ '^balls/[A-Za-z0-9_-]{1,64}/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}[.]mp4$'
+    or not (
+      coalesce(auth.jwt() -> 'app_metadata' -> 'kora_wall_events', '[]'::jsonb)
+      ? split_part(p_storage_path, '/', 2)
+    )
   then
     raise exception 'Unauthorized event video registration' using errcode = '42501';
   end if;
 
+  -- Confirm the authenticated operator owns this exact Storage object.
   select * into v_storage
   from storage.objects
   where bucket_id = 'kora-wall-media' and name = p_storage_path
   for update;
 
   if not found or v_storage.owner_id is distinct from auth.uid()::text then
-    raise exception 'Uploaded MP4 not found or not owned by this operator' using errcode = '42501';
-  end if;
-  if coalesce(v_storage.metadata ->> 'mimetype', '') <> 'video/mp4'
-    or coalesce((v_storage.metadata ->> 'size')::bigint, 0) <= 0
-    or coalesce((v_storage.metadata ->> 'size')::bigint, 0) > 104857600 then
-    raise exception 'MP4 metadata does not meet Storage limits' using errcode = '22023';
+    raise exception 'MP4 object not found or not owned by operator' using errcode = '42501';
   end if;
 
+  if coalesce(v_storage.metadata ->> 'mimetype', '') <> 'video/mp4'
+    or coalesce((v_storage.metadata ->> 'size')::bigint, 0) <= 0
+    or coalesce((v_storage.metadata ->> 'size')::bigint, 0) > 104857600
+  then
+    raise exception 'MP4 metadata outside bucket constraints' using errcode = '22023';
+  end if;
+
+  -- The wall must NOT show videos until a trusted moderation/validation process
+  -- has independently checked the MP4 bytes and changed approved to true.
   insert into public.kora_wall_ball_videos
     (storage_path, event_screen_consent, approved)
   values
     (p_storage_path, true, false);
-  -- uploaded_at is generated by the database default.
-  -- Moderation must separately validate media bytes before setting approved=true.
+  -- uploaded_at uses the database column default.
 end;
-$$;
+$kora$;
 
 revoke all on function public.register_kora_wall_ball_video(text) from public;
 grant execute on function public.register_kora_wall_ball_video(text) to authenticated;
 
--- The application does not receive Storage SELECT/UPDATE/DELETE privileges.
--- Existing broad policies and table grants must be audited separately.
+-- A browser-supplied content-type isn't proof of valid H.264 MP4 bytes.
+-- A trusted validator/moderator must check or transcode before approval.
+-- Arrange privileged cleanup of unregistered orphan Storage objects.
