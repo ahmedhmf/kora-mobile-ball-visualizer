@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 interface WallConfig { supabaseUrl: string; supabasePublishableKey: string; }
-interface UploadTicket { ticketId: string; ticketSecret: string; storagePath: string; uploadToken: string; }
+interface UploadTicket { ticketId: string; ticketSecret: string; storagePath: string; uploadToken: string; posterPath: string; posterUploadToken: string; }
 
 /** No user login. A server-issued single-object ticket authorizes direct Storage upload. */
 @Injectable({ providedIn: 'root' })
@@ -43,7 +43,10 @@ export class KoraWallPublishService {
     return result;
   }
 
-  async publish(mp4: Blob): Promise<void> {
+  async publish(mp4: Blob, poster: Blob): Promise<void> {
+    if (poster.type !== 'image/jpeg' || poster.size < 100 || poster.size > 2 * 1024 * 1024) {
+      throw new Error('Ball still image must be JPEG and under 2 MiB.');
+    }
     if (mp4.type !== 'video/mp4' || mp4.size < 12 || mp4.size > 20 * 1024 * 1024) {
       throw new Error('Generated MP4 must be under 20 MiB.');
     }
@@ -51,7 +54,7 @@ export class KoraWallPublishService {
     if (String.fromCharCode(...header.slice(4, 8)) !== 'ftyp') throw new Error('Invalid MP4 container.');
     const { client, functionUrl } = await this.setup();
     const ticket = await this.callFunction(functionUrl, { action: 'ticket' }) as unknown as UploadTicket;
-    if (!ticket.ticketId || !ticket.ticketSecret || !ticket.storagePath || !ticket.uploadToken) {
+    if (!ticket.ticketId || !ticket.ticketSecret || !ticket.storagePath || !ticket.uploadToken || !ticket.posterPath || !ticket.posterUploadToken) {
       throw new Error('Incomplete video upload ticket.');
     }
 
@@ -61,6 +64,12 @@ export class KoraWallPublishService {
         contentType: 'video/mp4', cacheControl: '3600'
       });
     if (uploadError) throw new Error('Storage upload failed: ' + uploadError.message);
+
+    const { error: posterError } = await client.storage.from('kora-wall-media')
+      .uploadToSignedUrl(ticket.posterPath, ticket.posterUploadToken, poster, {
+        contentType: 'image/jpeg', cacheControl: '3600'
+      });
+    if (posterError) throw new Error('Ball still-image upload failed: ' + posterError.message);
 
     const done = await this.callFunction(functionUrl, {
       action: 'complete', ticketId: ticket.ticketId, ticketSecret: ticket.ticketSecret
