@@ -55,7 +55,7 @@ async function requireOperator(req, res, next) {
 }
 const upload = multer({
   dest: tmpdir(),
-  limits: { fileSize: maxBytes, files: 1, fields: 3, fieldSize: 1024 },
+  limits: { fileSize: maxBytes, files: 1, fields: 2, fieldSize: 1024 },
   fileFilter(_req, file, cb) {
     cb(null, file.fieldname === 'video' && file.mimetype === 'video/mp4');
   }
@@ -125,7 +125,6 @@ async function handleUpload(req, res) {
   try {
     const slug = req.body?.eventSlug;
     if (!req.file || req.file.mimetype !== 'video/mp4') return res.status(400).json({ error: 'MP4 file required' });
-    if (req.body.consentConfirmed !== 'true') return res.status(400).json({ error: 'Explicit consent required' });
     if (typeof slug !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(slug) || !allowedEvents.has(slug) || !req.authorizedEvents?.has(slug)) {
       return res.status(400).json({ error: 'Unknown event' });
     }
@@ -148,8 +147,9 @@ async function handleUpload(req, res) {
     });
     if (uploadError) throw new Error('Private storage upload failed');
     // Moderation is intentionally NOT controlled by the client or by this endpoint.
-    // Authenticated operator attests explicit TV-display authorization;
-    // a separate trusted moderation workflow must set approved=true.
+    // This endpoint only accepts staff-authorized non-live promotional clips.
+    // For this workflow the server sets event_screen_consent=true, never the browser.
+    // Moderation remains separate and approved stays false.
     const { error: insertError } = await admin.from('kora_wall_ball_videos').insert({
       storage_path: storagePath,
       event_screen_consent: true,

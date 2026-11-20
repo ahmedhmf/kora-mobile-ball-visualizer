@@ -23,7 +23,6 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly exporting = signal(false);
   readonly exportPercent = signal(0);
   readonly wallBusy = signal(false);
-  readonly wallConsent = signal(false);
   readonly wallEvent = signal('');
   readonly wallEmail = signal('');
   readonly wallPassword = signal('');
@@ -95,7 +94,6 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.stopCamera();
     this.source = source;
     this.preparedMp4 = undefined;
-    this.wallConsent.set(false);
     this.wallResult.set('');
     if (this.imageUrl) URL.revokeObjectURL(this.imageUrl);
     const url = source.toDataURL('image/jpeg', .82);
@@ -174,10 +172,6 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (this.wallBusy() || this.exporting() || !this.viewer || !this.ready()) return;
     this.error.set('');
     this.wallResult.set('');
-    if (!this.wallConsent()) {
-      this.error.set('Separate, explicit event TV display consent is required.');
-      return;
-    }
     this.wallBusy.set(true);
     this.exportPercent.set(0);
     try {
@@ -187,7 +181,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       this.wallPassword.set('');
       const mp4 = this.preparedMp4 ?? await this.viewer.exportMp4(p => this.exportPercent.set(p));
       this.preparedMp4 = mp4;
-      await this.wall.publish(mp4, this.wallEvent().trim(), this.wallConsent());
+      await this.wall.publish(mp4, this.wallEvent().trim());
       this.wallResult.set('MP4 uploaded for moderation. It will appear on the event TV only after operator approval.');
     } catch (error) {
       this.wallPassword.set('');
@@ -202,7 +196,6 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.source = undefined;
     this.pending = undefined;
     this.preparedMp4 = undefined;
-    this.wallConsent.set(false);
     this.wallPassword.set('');
     this.wallResult.set('');
     this.ready.set(false);

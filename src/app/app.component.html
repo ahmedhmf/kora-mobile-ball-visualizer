@@ -48,11 +48,7 @@
 </div>
 <div class="publish-panel">
   <h3>Show this MP4 on the event TV</h3>
-  <p>Optional and separate from downloading. Only the finished video is sent; your photo and UV artwork are not uploaded.</p>
-  <label class="consent-label">
-    <input type="checkbox" [checked]="wallConsent()" [disabled]="wallBusy()" (change)="wallConsent.set($any($event.target).checked)">
-    <span>I confirm that the participant explicitly agreed to display this ball video on the event TV, or that this operator-created promotional video is authorized for display.</span>
-  </label>
+  <p>For authorized KORA promotional content. Only the finished MP4 is submitted, never the source photo or UV artwork. Operator sign-in is required.</p>
   <label class="wall-field">Event slug
     <input type="text" autocomplete="off" placeholder="Provided by event operator" [value]="wallEvent()" [disabled]="wallBusy()" (input)="wallEvent.set($any($event.target).value)">
   </label>
@@ -62,7 +58,7 @@
   <label class="wall-field">Operator password
     <input type="password" autocomplete="current-password" placeholder="Password" [value]="wallPassword()" [disabled]="wallBusy()" (input)="wallPassword.set($any($event.target).value)">
   </label>
-  <button class="secondary" [disabled]="!ready() || exporting() || wallBusy() || !wallConsent() || !wallEvent().trim() || !wallEmail().trim() || !wallPassword()" (click)="publishToEventWall()">
+  <button class="secondary" [disabled]="!ready() || exporting() || wallBusy() || !wallEvent().trim() || !wallEmail().trim() || !wallPassword()" (click)="publishToEventWall()">
     {{ wallBusy() ? 'Rendering and securely uploading MP4… ' + exportPercent() + '%' : 'Send MP4 for event TV approval ↗' }}
   </button>
   @if (wallResult()) { <p class="wall-success" role="status">{{ wallResult() }}</p> }

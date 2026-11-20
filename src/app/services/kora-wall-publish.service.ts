@@ -43,8 +43,7 @@ export class KoraWallPublishService {
     if (error) throw new Error('Operator sign-in failed.');
   }
 
-  async publish(mp4: Blob, eventSlug: string, consentConfirmed: boolean): Promise<WallPublishResult> {
-    if (!consentConfirmed) throw new Error('Explicit event TV display consent is required.');
+  async publish(mp4: Blob, eventSlug: string): Promise<WallPublishResult> {
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(eventSlug)) throw new Error('Enter the event slug provided by the operator.');
     if (mp4.type !== 'video/mp4') throw new Error('Only rendered MP4 videos can be published.');
     const { client, config } = await this.setup();
@@ -53,7 +52,6 @@ export class KoraWallPublishService {
     const body = new FormData();
     body.set('video', new File([mp4], 'kora-ball.mp4', { type: 'video/mp4' }));
     body.set('eventSlug', eventSlug);
-    body.set('consentConfirmed', 'true');
     const response = await fetch(config.uploadEndpoint, {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + data.session.access_token },
