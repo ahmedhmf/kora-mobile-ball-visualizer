@@ -57,3 +57,7 @@ The export is now **720 × 1280 (9:16)**, 30 fps, 8 seconds, H.264 MP4. A determ
 ## KORA brand palette
 
 The app UI, loading indicators, camera guide, decorative ball preview, PWA icon, and video-export environment now use KORA black and brand red **#FF0006**. Previous green radial gradients, glow, and smoke are replaced with equivalent red-toned effects. White logo and user-uploaded artwork/UV atlas remain unchanged.
+
+## Application branding assets
+
+The mobile header uses the existing transparent white KORA logo at `public/branding/kora-wordmark.svg`. The welcome screen uses a lightweight WebP copy of the supplied white/red/black KORA ball at `public/branding/kora-home-ball.webp` (240 × 240 pixels), replacing the illustrative CSS sphere. The 3D model/texture pipeline and MP4 export remain unchanged.

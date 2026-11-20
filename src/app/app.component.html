@@ -1,5 +1,5 @@
 <div class="shell">
-<header><div class="brand"><span class="brandmark">K</span><strong>KORA <small>SCANNER</small></strong></div><span class="live">● ARTWORK TO 3D</span></header>
+<header><div class="brand" aria-label="KORA Scanner"><img class="brand-logo" src="branding/kora-wordmark.svg" alt="KORA"><span class="brand-sub">SCANNER</span></div><span class="live">● ARTWORK TO 3D</span></header>
 <input #picker type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.pdf" (change)="selected($event)" hidden>
 <main>
 @if (stage() === 'start') {
@@ -7,7 +7,7 @@
   <span class="eyebrow">YOUR DESIGN, ON THE BALL</span>
   <h1>Bring your<br><em>artwork</em> to life.</h1>
   <p>Scan your printed KORA A3 sheet and watch your own design wrap around a 3D football.</p>
-  <div class="art"><div class="fakeball"><span></span></div><div class="stamp">32 PANELS. ONE DESIGN.</div></div>
+  <div class="art"><img class="hero-ball-image" src="branding/kora-home-ball.webp" alt="KORA white football with red and black panel graphics" width="240" height="240"><div class="stamp">32 PANELS. ONE DESIGN.</div></div>
   <button class="primary" (click)="startCamera()"><span>◎ &nbsp; Scan your design</span><span>↗</span></button>
   <button class="secondary" (click)="upload()"><span>Upload photo or PDF</span><span>↗</span></button>
   <p class="hint">Best results: include the full sheet and all four corners.</p>
