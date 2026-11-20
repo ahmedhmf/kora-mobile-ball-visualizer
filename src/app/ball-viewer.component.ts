@@ -2,6 +2,7 @@ import { AfterViewInit, Component, ElementRef, OnDestroy, ViewChild } from '@ang
 import { ArcRotateCamera, Color3, Color4, Engine, HemisphericLight, Mesh, PBRMaterial, Scene, SceneLoader, Texture, Vector3 } from '@babylonjs/core';
 import { OBJFileLoader } from '@babylonjs/loaders/OBJ';
 import { encodeKoraMp4 } from './services/ball-video-export.service';
+import { composeReelFrame, loadReelLogo, REEL_WIDTH, REEL_HEIGHT } from './services/kora-reel-compositor';
 
 OBJFileLoader.SKIP_MATERIALS = true;
 
@@ -22,7 +23,7 @@ export class BallViewerComponent implements AfterViewInit, OnDestroy {
   private readonly resize = () => this.engine?.resize();
 
   ngAfterViewInit(): void {
-    this.engine = new Engine(this.surface.nativeElement, true, { preserveDrawingBuffer: true });
+    this.engine = new Engine(this.surface.nativeElement, true, { preserveDrawingBuffer: true, alpha: true });
     const scene = new Scene(this.engine);
     this.scene = scene;
     scene.clearColor = new Color4(0.05, 0.09, 0.07, 1);
@@ -100,26 +101,36 @@ export class BallViewerComponent implements AfterViewInit, OnDestroy {
     const startingAlpha = camera.alpha;
     const startingBeta = camera.beta;
     const startingRadius = camera.radius;
+    const originalClear = scene.clearColor.clone();
+    const logo = await loadReelLogo();
+    const composition = document.createElement('canvas');
+    composition.width = REEL_WIDTH;
+    composition.height = REEL_HEIGHT;
+    const ctx = composition.getContext('2d', { alpha: false });
+    if (!ctx) throw new Error('Cannot create portrait video frames.');
     this.exporting = true;
     engine.stopRenderLoop();
     camera.detachControl();
     try {
-      // Render directly to an exact 16:9 drawing buffer rather than stretching
-      // the mobile portrait preview. A gentle tilt reveals upper/lower panels.
-      engine.setSize(1280, 720);
-      camera.radius = 5.2;
-      return await encodeKoraMp4(canvas, (index, total) => {
+      // Export separate transparent Babylon frames in vertical 9:16 format.
+      // The compositor adds smoke and logo without changing the model UV texture.
+      scene.clearColor = new Color4(0, 0, 0, 0);
+      engine.setSize(REEL_WIDTH, REEL_HEIGHT);
+      camera.radius = 8.5;
+      return await encodeKoraMp4(composition, (index, total) => {
         const phase = 2 * Math.PI * index / total;
         camera.alpha = startingAlpha + phase;
         camera.beta = Math.PI / 2 + 0.27 * Math.sin(phase);
         engine.beginFrame();
         scene.render();
         engine.endFrame();
-      }, onProgress);
+        composeReelFrame(ctx, canvas, logo, index / 30);
+      }, onProgress, { width: REEL_WIDTH, height: REEL_HEIGHT, fps: 30, seconds: 8 });
     } finally {
       camera.alpha = startingAlpha;
       camera.beta = startingBeta;
       camera.radius = startingRadius;
+      scene.clearColor = originalClear;
       engine.resize();
       camera.attachControl(canvas, true);
       engine.runRenderLoop(() => scene.render());

@@ -35,8 +35,8 @@
 @if (!ready()) {<p role="status" class="hint">Loading the exact KORA model and prepared texture…</p>}
 @if (uncertain()) {<p class="notice">Orientation looks uncertain. <button (click)="useScan(true)">Rotate source 180° and try again</button></p>}
 <div class="export-panel">
-  <div class="export-heading"><span>↻ &nbsp; 360° VIDEO</span><strong>16:9 · 720p · MP4</strong></div>
-  <p>Show every side of your artwork with an 8-second rotating ball video.</p>
+  <div class="export-heading"><span>↻ &nbsp; 360° VIDEO</span><strong>9:16 · 720 × 1280 · MP4</strong></div>
+  <p>Create an 8-second vertical Instagram Reel with a rotating ball, drifting smoke and your KORA logo at the top.</p>
   <button class="primary" [disabled]="!ready() || exporting()" (click)="downloadMp4()">
     <span>{{ exporting() ? 'Exporting MP4… ' + exportPercent() + '%' : '↓  Download rotating MP4' }}</span>
     <span>{{ exporting() ? '◌' : '↗' }}</span>

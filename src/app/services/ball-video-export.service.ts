@@ -15,14 +15,14 @@ export async function encodeKoraMp4(
   canvas: HTMLCanvasElement,
   renderFrame: (index: number, total: number) => void,
   onProgress: (percent: number) => void,
-  options: KoraVideoExportOptions = { width: 1280, height: 720, fps: 30, seconds: 8 }
+  options: KoraVideoExportOptions = { width: 720, height: 1280, fps: 30, seconds: 8 }
 ): Promise<Blob> {
   if (typeof VideoEncoder === 'undefined' || typeof VideoFrame === 'undefined') {
     throw new Error('MP4 export requires browser WebCodecs support. Try an updated desktop Chrome or Edge browser.');
   }
 
   const config: VideoEncoderConfig = {
-    codec: 'avc1.42001f', // H.264 Baseline Profile, Level 3.1 (720p30).
+    codec: 'avc1.42001f', // H.264 Baseline Profile, Level 3.1 (portrait 720 × 1280 at 30 FPS).
     width: options.width,
     height: options.height,
     framerate: options.fps,
@@ -32,7 +32,7 @@ export async function encodeKoraMp4(
   };
   const support = await VideoEncoder.isConfigSupported(config);
   if (!support.supported) {
-    throw new Error('This device cannot encode H.264 MP4 at 720p. Try a browser with H.264 WebCodecs encoding.');
+    throw new Error('This device cannot encode H.264 MP4 at 720 × 1280. Try a browser with H.264 WebCodecs encoding.');
   }
 
   const target = new ArrayBufferTarget();

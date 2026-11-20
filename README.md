@@ -49,3 +49,7 @@ The image-preparation services and paper worker were copied from that pinned sou
 ## Rotating MP4 export
 
 After an artwork atlas has loaded on the ball, choose **Download rotating MP4**. The viewer renders a deterministic, silent **8-second 1280 × 720 (16:9), 30 FPS H.264 MP4** with a full 360° horizontal turn and a gentle tilt. The existing on-screen orbit is restored afterward. Export uses the browser's WebCodecs `VideoEncoder` and the `mp4-muxer` MP4 container library; it doesn't upload artwork to a server. On unsupported browsers/devices (including those without H.264 WebCodecs encoding), export shows an explicit error rather than generating a mislabeled file. Keep the app foregrounded until the download starts. Real-device export compatibility and Instagram upload have not yet been verified.
+
+## Instagram Reel branding
+
+The export is now **720 × 1280 (9:16)**, 30 fps, 8 seconds, H.264 MP4. A deterministic smoke overlay drifts around the model, and a compact vector tracing of the uploaded KORA wordmark appears centered at the top over a pale backing panel (the supplied logo has black lettering). The smoke and branding are applied only in the export compositor, not to the source artwork or UV atlas. The portrait output is silent. The original full-resolution logo remains in the chat attachment; the repository contains a scaled vector trace for predictable mobile rendering.

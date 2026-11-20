@@ -142,7 +142,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       const url = URL.createObjectURL(mp4);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'kora-ball-360-landscape.mp4';
+      link.download = 'kora-ball-360-instagram-reel.mp4';
       document.body.appendChild(link);
       link.click();
       link.remove();
