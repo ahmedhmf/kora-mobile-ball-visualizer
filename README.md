@@ -45,3 +45,7 @@ The working source remains unchanged:
 [ahmedhmf/kora-ball-viewer at 08c7765525aa8692b207d535b6cfce9027e6c345](https://github.com/ahmedhmf/kora-ball-viewer/tree/08c7765525aa8692b207d535b6cfce9027e6c345).
 
 The image-preparation services and paper worker were copied from that pinned source. The only substantive edits in those reference files are base-path-relative URLs for the PDF and paper workers.
+
+## Rotating MP4 export
+
+After an artwork atlas has loaded on the ball, choose **Download rotating MP4**. The viewer renders a deterministic, silent **8-second 1280 × 720 (16:9), 30 FPS H.264 MP4** with a full 360° horizontal turn and a gentle tilt. The existing on-screen orbit is restored afterward. Export uses the browser's WebCodecs `VideoEncoder` and the `mp4-muxer` MP4 container library; it doesn't upload artwork to a server. On unsupported browsers/devices (including those without H.264 WebCodecs encoding), export shows an explicit error rather than generating a mislabeled file. Keep the app foregrounded until the download starts. Real-device export compatibility and Instagram upload have not yet been verified.

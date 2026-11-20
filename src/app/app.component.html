@@ -34,7 +34,19 @@
 <div class="stage ball"><app-ball-viewer></app-ball-viewer><span class="tag">INTERACTIVE 3D</span></div>
 @if (!ready()) {<p role="status" class="hint">Loading the exact KORA model and prepared texture…</p>}
 @if (uncertain()) {<p class="notice">Orientation looks uncertain. <button (click)="useScan(true)">Rotate source 180° and try again</button></p>}
-<button class="primary" (click)="reset()">Scan another design ↗</button>
+<div class="export-panel">
+  <div class="export-heading"><span>↻ &nbsp; 360° VIDEO</span><strong>16:9 · 720p · MP4</strong></div>
+  <p>Show every side of your artwork with an 8-second rotating ball video.</p>
+  <button class="primary" [disabled]="!ready() || exporting()" (click)="downloadMp4()">
+    <span>{{ exporting() ? 'Exporting MP4… ' + exportPercent() + '%' : '↓  Download rotating MP4' }}</span>
+    <span>{{ exporting() ? '◌' : '↗' }}</span>
+  </button>
+  @if (exporting()) {
+    <progress [value]="exportPercent()" max="100" aria-label="MP4 export progress"></progress>
+    <p class="hint">Keep this page open until the download begins.</p>
+  }
+</div>
+<button class="secondary" [disabled]="exporting()" (click)="reset()">Scan another design ↗</button>
 </section>
 }
 </main>

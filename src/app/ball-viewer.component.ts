@@ -1,6 +1,7 @@
 import { AfterViewInit, Component, ElementRef, OnDestroy, ViewChild } from '@angular/core';
 import { ArcRotateCamera, Color3, Color4, Engine, HemisphericLight, Mesh, PBRMaterial, Scene, SceneLoader, Texture, Vector3 } from '@babylonjs/core';
 import { OBJFileLoader } from '@babylonjs/loaders/OBJ';
+import { encodeKoraMp4 } from './services/ball-video-export.service';
 
 OBJFileLoader.SKIP_MATERIALS = true;
 
@@ -15,15 +16,18 @@ export class BallViewerComponent implements AfterViewInit, OnDestroy {
   private scene?: Scene;
   private material?: PBRMaterial;
   private texture?: Texture;
+  private camera?: ArcRotateCamera;
+  private exporting = false;
   private ready?: Promise<void>;
   private readonly resize = () => this.engine?.resize();
 
   ngAfterViewInit(): void {
-    this.engine = new Engine(this.surface.nativeElement, true);
+    this.engine = new Engine(this.surface.nativeElement, true, { preserveDrawingBuffer: true });
     const scene = new Scene(this.engine);
     this.scene = scene;
     scene.clearColor = new Color4(0.05, 0.09, 0.07, 1);
     const camera = new ArcRotateCamera('camera', Math.PI / 2, Math.PI / 2.4, 6, Vector3.Zero(), scene);
+    this.camera = camera;
     camera.lowerRadiusLimit = 2.5;
     camera.upperRadiusLimit = 10;
     camera.attachControl(this.surface.nativeElement, true);
@@ -80,6 +84,47 @@ export class BallViewerComponent implements AfterViewInit, OnDestroy {
     this.texture = next;
     this.material.albedoTexture = next;
     old?.dispose();
+  }
+
+  async exportMp4(onProgress: (percent: number) => void): Promise<Blob> {
+    if (this.exporting) throw new Error('An export is already running.');
+    await this.ready;
+    if (!this.texture || !this.scene || !this.engine || !this.camera) {
+      throw new Error('Load your artwork on the KORA ball before exporting.');
+    }
+
+    const engine = this.engine;
+    const scene = this.scene;
+    const camera = this.camera;
+    const canvas = this.surface.nativeElement;
+    const startingAlpha = camera.alpha;
+    const startingBeta = camera.beta;
+    const startingRadius = camera.radius;
+    this.exporting = true;
+    engine.stopRenderLoop();
+    camera.detachControl();
+    try {
+      // Render directly to an exact 16:9 drawing buffer rather than stretching
+      // the mobile portrait preview. A gentle tilt reveals upper/lower panels.
+      engine.setSize(1280, 720);
+      camera.radius = 5.2;
+      return await encodeKoraMp4(canvas, (index, total) => {
+        const phase = 2 * Math.PI * index / total;
+        camera.alpha = startingAlpha + phase;
+        camera.beta = Math.PI / 2 + 0.27 * Math.sin(phase);
+        engine.beginFrame();
+        scene.render();
+        engine.endFrame();
+      }, onProgress);
+    } finally {
+      camera.alpha = startingAlpha;
+      camera.beta = startingBeta;
+      camera.radius = startingRadius;
+      engine.resize();
+      camera.attachControl(canvas, true);
+      engine.runRenderLoop(() => scene.render());
+      this.exporting = false;
+    }
   }
 
   ngOnDestroy(): void {

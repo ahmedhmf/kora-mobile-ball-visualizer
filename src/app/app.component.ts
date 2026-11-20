@@ -19,6 +19,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly image = signal('');
   readonly uncertain = signal(false);
   readonly ready = signal(false);
+  readonly exporting = signal(false);
+  readonly exportPercent = signal(0);
   private readonly prepare = inject(BallTexturePreparationService);
   private readonly inputs = inject(ScanInputService);
   private stream?: MediaStream;
@@ -130,7 +132,31 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       if (generation === this.pendingGeneration) this.error.set(this.message(error));
     }
   }
+  async downloadMp4(): Promise<void> {
+    if (this.exporting() || !this.ready() || !this.viewer) return;
+    this.error.set('');
+    this.exportPercent.set(0);
+    this.exporting.set(true);
+    try {
+      const mp4 = await this.viewer.exportMp4(progress => this.exportPercent.set(progress));
+      const url = URL.createObjectURL(mp4);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'kora-ball-360-landscape.mp4';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      // Safari may need extra time to hand the Blob URL to the download manager.
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (error) {
+      this.error.set(this.message(error));
+    } finally {
+      this.exporting.set(false);
+    }
+  }
+
   reset(): void {
+    if (this.exporting()) return;
     ++this.pendingGeneration;
     this.stopCamera();
     this.source = undefined;
