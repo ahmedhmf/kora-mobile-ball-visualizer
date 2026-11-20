@@ -19,6 +19,7 @@ export class BallViewerComponent implements AfterViewInit, OnDestroy {
   private texture?: Texture;
   private camera?: ArcRotateCamera;
   private exporting = false;
+  private posterCanvas?: HTMLCanvasElement;
   private ready?: Promise<void>;
   private readonly resize = () => this.engine?.resize();
 
@@ -87,6 +88,14 @@ export class BallViewerComponent implements AfterViewInit, OnDestroy {
     old?.dispose();
   }
 
+  async exportPoster(): Promise<Blob> {
+    if (!this.posterCanvas) throw new Error('Render the MP4 before uploading its still image.');
+    return new Promise<Blob>((resolve, reject) => this.posterCanvas!.toBlob(
+      blob => blob ? resolve(blob) : reject(new Error('Could not export ball poster.')),
+      'image/jpeg', 0.86
+    ));
+  }
+
   async exportMp4(onProgress: (percent: number) => void): Promise<Blob> {
     if (this.exporting) throw new Error('An export is already running.');
     await this.ready;
@@ -109,6 +118,7 @@ export class BallViewerComponent implements AfterViewInit, OnDestroy {
     const ctx = composition.getContext('2d', { alpha: false });
     if (!ctx) throw new Error('Cannot create portrait video frames.');
     this.exporting = true;
+    this.posterCanvas = undefined;
     engine.stopRenderLoop();
     camera.detachControl();
     try {
@@ -125,6 +135,13 @@ export class BallViewerComponent implements AfterViewInit, OnDestroy {
         scene.render();
         engine.endFrame();
         composeReelFrame(ctx, canvas, logo, index / 30);
+        if (index === 0) {
+          const still = document.createElement('canvas');
+          still.width = composition.width;
+          still.height = composition.height;
+          still.getContext('2d')!.drawImage(composition, 0, 0);
+          this.posterCanvas = still;
+        }
       }, onProgress, { width: REEL_WIDTH, height: REEL_HEIGHT, fps: 30, seconds: 8 });
     } finally {
       camera.alpha = startingAlpha;
