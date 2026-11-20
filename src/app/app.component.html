@@ -46,7 +46,7 @@
 </div>
 <div class="publish-panel">
   <h3>Show this MP4 on the event TV</h3>
-  <p>For authorized KORA promotional content. Only the finished MP4 is submitted, never the source photo or UV artwork. Operator sign-in is required.</p>
+  <p>For authorized KORA promotional content. The finished MP4 uploads directly to our private Supabase bucket. No source photos or artwork files are uploaded. Operator sign-in is required.</p>
   <label class="wall-field">Event slug
     <input type="text" autocomplete="off" placeholder="Provided by event operator" [value]="wallEvent()" [disabled]="wallBusy()" (input)="wallEvent.set($any($event.target).value)">
   </label>

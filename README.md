@@ -62,15 +62,30 @@ The app UI, loading indicators, camera guide, decorative ball preview, PWA icon,
 
 The mobile header uses the existing transparent white KORA logo at `public/branding/kora-wordmark.svg`. The welcome screen uses a lightweight WebP copy of the supplied white/red/black KORA ball at `public/branding/kora-home-ball.webp` (240 × 240 pixels), replacing the illustrative CSS sphere. The 3D model/texture pipeline and MP4 export remain unchanged.
 
-## Protected event TV MP4 publishing
+## Direct-to-Supabase MP4 uploads
 
-After generating a ball, users may **download the MP4 locally** without publishing. A separate section allows an authenticated, event-authorized operator to submit the *rendered MP4 only* for moderation. This is a non-live promotional video workflow; there is no participant consent checkbox. No scanned source photo, PDF, image, PNG or UV atlas is uploaded.
+The **finished 9:16 H.264 MP4** is uploaded **directly from Angular to the private Supabase Storage bucket** `kora-wall-media`; no Node server or upload endpoint is required. The app uploads **MP4 only**, never the scanned image, PDF or UV atlas. `Download MP4` stays available without publishing.
 
-This feature **requires deployment and configuration** before it can work:
-- Deploy the trusted `server/` Node upload service with FFmpeg/FFprobe and secret Supabase service credentials; follow `server/README.md`.
-- Configure the public `public/kora-wall-config.json` with the Supabase project URL, public/publishable key and trusted HTTPS server upload endpoint. It is intentionally blank by default.
-- Have a Supabase administrator mark trusted accounts with `app_metadata.kora_wall_operator=true` and configure permitted event slugs.
-- The trusted upload server sets `event_screen_consent=true` automatically for authenticated, event-authorized **non-live promotional uploads**, and `approved=false` always. The browser sends no consent flag. A separate trusted moderator must approve before the existing wall feed can show the clip. This flag does not represent proof of a participant's personal consent.
-- Add shared rate limits/quotas and event-specific operator permissions for deployment at scale; never expose the service-role key or let anonymous visitors write to Storage.
+### Supabase setup (required)
 
-The public site cannot claim a completed upload until the trusted server returns success. The MP4 download workflow is unchanged.
+1. Create/verify a **private** bucket `kora-wall-media`; its size limit is **100 MiB**, MIME allowance `video/mp4`.
+2. In **Supabase Dashboard → SQL Editor**, run [`supabase/direct-wall-upload.sql`](supabase/direct-wall-upload.sql). It installs a narrowly scoped `storage.objects` INSERT policy for authenticated event operators and an authenticated, server-executed `register_kora_wall_ball_video` RPC that verifies the uploaded object and writes the metadata record.
+3. Configure [`public/kora-wall-config.json`](public/kora-wall-config.json) with **only** the project URL and public/publishable key:
+
+   ```json
+   {
+     "supabaseUrl": "https://YOUR-PROJECT.supabase.co",
+     "supabasePublishableKey": "YOUR_PUBLIC_PUBLISHABLE_KEY"
+   }
+   ```
+
+4. In Supabase Auth, use administrator-only tooling to set the authenticated operator's `app_metadata`: `{"kora_wall_operator":true,"kora_wall_events":["event-1"]}`. Sign in again to refresh JWT claims. Event slugs must contain only letters, digits, `_` or `-`.
+5. Ensure `public.kora_wall_ball_videos` has the original columns, unique `storage_path`, and a default `uploaded_at` timestamp. Verify moderation and wall feed are active.
+
+### Security and moderation
+
+The browser generates `balls/<event-slug>/<random-v4-uuid>.mp4` and calls `supabase.storage.from('kora-wall-media').upload(path, mp4, {contentType:'video/mp4',upsert:false})`. After Storage confirms success, it calls `supabase.rpc('register_kora_wall_ball_video',{p_storage_path:path})`. **Both** the operator/event restrictions and the values `event_screen_consent=true, approved=false` are enforced by database code, never trusted from the browser. This is an authorized non-live promotional workflow; the consent flag here is not evidence of participant permission.
+
+**Important security difference:** Pure browser-to-Storage uploads cannot provide trusted FFmpeg/FFprobe validation or transcoding. The SQL function verifies object existence, ownership, MIME, size and path, but **not actual codec or MP4 bytes**. Keep uploaded objects `approved=false` until a trusted moderation/validation worker or operator checks/re-encodes H.264/yuv420p and faststart. A malformed or spoofed client upload must never become wall-visible solely because the MIME says `video/mp4`. Schedule privileged cleanup for failed registration orphans. Audit other Storage INSERT policies: permissive RLS policies are OR-combined, so any broad existing upload policy must be removed or narrowed.
+
+Never put a service-role/secret key in the frontend. Anonymous visitors cannot upload without authorization; only the published key and authenticated operator session are used. For production scale, enforce stronger per-event/user rate limits and object cleanup/validation.
