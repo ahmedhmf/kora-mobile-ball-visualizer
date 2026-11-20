@@ -178,9 +178,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       if (generation !== this.pendingGeneration) return;
       this.preparedMp4 = mp4; // Keep for optional download without rendering twice.
       this.wallResult.set('MP4 rendered. Uploading to private Supabase Storage…');
-      await this.wall.publish(mp4);
+      const poster = await this.viewer.exportPoster();
+      if (generation !== this.pendingGeneration) return;
+      await this.wall.publish(mp4, poster);
       if (generation === this.pendingGeneration) {
-        this.wallResult.set('MP4 uploaded to Supabase and automatically published to the event TV feed.');
+        this.wallResult.set('MP4 and still image uploaded and automatically published to the event TV feed.');
       }
     } catch (error) {
       if (generation === this.pendingGeneration) {
